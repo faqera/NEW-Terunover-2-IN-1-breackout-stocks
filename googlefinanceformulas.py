@@ -17,7 +17,7 @@ def get_google_sheet():
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
         
-        spreadsheet_id = "YOUR_SHEET_ID_HERE"  # ⚠️ अपनी Sheet ID यहाँ डालें
+        spreadsheet_id = "1h5DL7tnrNnukH_EzfteoePDSRyfuICdXC3SB367tfEQ"  # ⚠️ अपनी Sheet ID यहाँ डालें
         sheet = client.open_by_key(spreadsheet_id)
         worksheet = sheet.worksheet("Top 250 Stocks")
         return worksheet

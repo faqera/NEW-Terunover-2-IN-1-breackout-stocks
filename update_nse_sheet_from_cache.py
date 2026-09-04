@@ -279,3 +279,19 @@ def main():
 
 if __name__ == "__main__":
     main()
+import requests
+
+def trigger_google_apps_script():
+    web_app_url = "https://script.google.com/macros/s/AKfycbxB2vJdV2nE7kfmILJapdSqoz0zZK6UZQer-S7UrH9EZ30PB2zbOS9e260i3hzw-m57/exec"
+    try:
+        response = requests.post(web_app_url, json={"sheet": "BOT SIGNALS"})
+        print("✅ Apps Script trigger response:", response.text)
+    except Exception as e:
+        print("⚠️ Could not trigger Apps Script:", e)
+
+# अपनी मौजूदा स्क्रिप्ट के आखिर में यह कॉल करें
+if __name__ == "__main__":
+    # ... आपका मौजूदा कोड (जो शीट अपडेट करता है) ...
+    
+    # अब सिग्नल जनरेट करने के लिए Apps Script को ट्रिगर करें
+    trigger_google_apps_script()

@@ -1,7 +1,7 @@
 name: One-Time Backfill (Historical Cache)
 
 on:
-  workflow_dispatch:    # इसे सिर्फ आप मैन्युअली (हाथ से) चलाएंगे, एक बार
+  workflow_dispatch:   # मैन्युअली चलाएँ, सिर्फ एक बार
 
 jobs:
   build-backfill:

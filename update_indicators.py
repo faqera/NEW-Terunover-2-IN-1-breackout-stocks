@@ -30,7 +30,9 @@ def calculate_indicators(symbol, close_price):
     """
     try:
         ticker = yf.Ticker(f"{symbol}.NS")
-        hist = ticker.history(period="1y")
+        # FIX #2: auto_adjust=False -> raw/actual prices (GOOGLEFINANCE जैसा behavior),
+        # dividends/splits/bonus के लिए silently adjust किए हुए prices नहीं
+        hist = ticker.history(period="1y", auto_adjust=False)
         
         if hist.empty:
             return close_price, None, None, None, "Data Error", None, "TICKER NOT FOUND"
@@ -58,7 +60,10 @@ def calculate_indicators(symbol, close_price):
             bull_status = "In Bull Run"
         elif (dma_50 is not None and dma_100 is not None and dma_200 is not None and
               cmp < dma_50 and cmp < dma_100 and cmp < dma_200 and 
-              dma_dist is not None and dma_dist <= -0.01):
+              # FIX #1: लोअर बाउंड जोड़ी गई (मूल formula: I2>=-10 AND I2<=-0.01)
+              # पहले सिर्फ ऊपरी सीमा (<=-0.01) चेक हो रही थी, जिससे -10% से भी ज़्यादा
+              # गिरे हुए stocks गलती से "In Bear Run" दिखा रहे थे
+              dma_dist is not None and -10 <= dma_dist <= -0.01):
             bull_status = "In Bear Run"
         else:
             bull_status = "Unconfirmed"
@@ -170,7 +175,7 @@ def main():
     
     client = get_google_client()
     
-    spreadsheet_id = "1h5DL7tnrNnukH_EzfteoePDSRyfuICdXC3SB367tfEQ"  # ⚠️ अपनी Sheet ID यहाँ डालें
+    spreadsheet_id = "1h5DL7tnrNnukH_EzfteoePDSRyfuICdXC3SB367tfEQ"  # NEW sheet ID
     
     try:
         # दोनों टैब कनेक्ट करें

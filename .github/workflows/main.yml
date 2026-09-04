@@ -2,7 +2,7 @@ name: Daily NSE Sheet Update
 
 on:
   schedule:
-    # शाम 7:00 बजे IST (1:30 PM UTC)
+    # शाम 7:00 बजे IST (1:30 PM UTC) - सोमवार से शुक्रवार
     - cron: '30 13 * * 1-5'
   workflow_dispatch:
 
@@ -28,11 +28,11 @@ jobs:
       env:
         GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
       run: |
-        python update_top250_lists.py
+        python update_sheet.py
 
     # --- स्टेप 2: फिर उसी लिस्ट के हिसाब से Technical Indicators (D:J) भरें ---
     - name: Step 2 - Update Technical Indicators (DMA/CAR/BullBear)
       env:
         GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
       run: |
-        python update_technical_indicators.py
+        python update_nse_sheet_from_cache.py

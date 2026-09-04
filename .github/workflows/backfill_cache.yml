@@ -6,6 +6,8 @@ on:
 jobs:
   build-backfill:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # ⬅️ यह लाइन जोड़ी है (Push करने की अनुमति के लिए)
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3

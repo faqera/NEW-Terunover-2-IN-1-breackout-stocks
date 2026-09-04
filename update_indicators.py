@@ -6,7 +6,7 @@ import os
 import json
 
 # ---------- Google Sheets Authentication ----------
-def get_google_sheet():
+def get_google_client():
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds_json = os.getenv('GCP_CREDENTIALS')
@@ -16,22 +16,13 @@ def get_google_sheet():
         creds_dict = json.loads(creds_json)
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
-        
-        spreadsheet_id = "1h5DL7tnrNnukH_EzfteoePDSRyfuICdXC3SB367tfEQ"  # ⚠️ अपनी Sheet ID यहाँ डालें
-        sheet = client.open_by_key(spreadsheet_id)
-        worksheet = sheet.worksheet("Top 250 Stocks")
-        return worksheet
+        return client
     except Exception as e:
         print(f"❌ Google Sheet Connection Error: {e}")
         exit(1)
 
 # ---------- Technical Indicators Calculation ----------
 def calculate_indicators(symbol, close_price):
-    """
-    symbol: NSE Code (जैसे 'RELIANCE')
-    close_price: Sheet से लिया गया CMP (कॉलम C)
-    Return: (cmp, dma_50, dma_100, dma_200, bull_status, dma_dist, car_rating)
-    """
     try:
         ticker = yf.Ticker(f"{symbol}.NS")
         hist = ticker.history(period="1y")
@@ -98,29 +89,22 @@ def calculate_indicators(symbol, close_price):
         print(f"⚠️ {symbol} के लिए Error: {e}")
         return close_price, None, None, None, "Error", None, "TICKER NOT FOUND"
 
-# ---------- Main Execution with Batch Update ----------
-def main():
-    print("🚀 Technical Indicators Script Started (Batch Update)...")
+# ---------- एक टैब को प्रोसेस करने वाला Function ----------
+def process_sheet(worksheet, sheet_name):
+    print(f"\n📊 {sheet_name} टैब प्रोसेस हो रहा है...")
     
-    worksheet = get_google_sheet()
     all_data = worksheet.get_all_values()
     
     if len(all_data) < 2:
-        print("❌ Sheet में कोई डेटा नहीं मिला। पहले update_sheet.py चलाएँ।")
+        print(f"⚠️ {sheet_name} में कोई डेटा नहीं मिला, स्किप कर रहे हैं")
         return
     
-    rows = all_data[1:]  # Row 2 से आगे
+    rows = all_data[1:]
     total_rows = len(rows)
-    
-    # हम D2:J251 (या जितनी पंक्तियाँ हैं) के लिए एक 2D लिस्ट बनाएँगे
-    # Index 0 → Row 2, Index 1 → Row 3, ... Index (total_rows-1) → अंतिम Row
     batch_values = []
     
-    print(f"📊 कुल {total_rows} स्टॉक्स प्रोसेस हो रहे हैं...")
-    
-    for idx, row in enumerate(rows, start=2):  # idx = actual row number in sheet
+    for idx, row in enumerate(rows, start=2):
         if len(row) < 3 or not row[0].strip():
-            # अगर A, B, C नहीं हैं तो खाली रखें
             batch_values.append(["", "", "", "", "", "", ""])
             continue
         
@@ -128,14 +112,12 @@ def main():
         try:
             close_price = float(row[2])
         except (ValueError, IndexError):
-            print(f"⚠️ Row {idx}: '{row[0]}' का Close Price सही नहीं है, स्किप कर रहे हैं")
+            print(f"⚠️ {sheet_name} Row {idx}: '{row[0]}' का Close Price सही नहीं है")
             batch_values.append(["", "", "", "", "", "", ""])
             continue
         
-        # इंडिकेटर्स निकालें
         cmp, dma_50, dma_100, dma_200, bull_status, dma_dist, car_rating = calculate_indicators(symbol, close_price)
         
-        # D से J कॉलम (7 कॉलम)
         row_data = [
             cmp if cmp is not None else "",
             dma_50 if dma_50 is not None else "",
@@ -147,31 +129,49 @@ def main():
         ]
         batch_values.append(row_data)
         
-        # Progress दिखाएँ
         if (idx - 1) % 50 == 0:
-            print(f"⏳ {idx-1} स्टॉक्स प्रोसेस हो चुके हैं...")
+            print(f"⏳ {sheet_name}: {idx-1}/{total_rows} स्टॉक्स प्रोसेस हो चुके हैं...")
         
-        # API Rate Limit से बचने के लिए थोड़ा Delay (लेकिन अब यह ज़्यादा मायने नहीं रखता)
-        time.sleep(0.1)
+        time.sleep(0.05)
     
-    # ---------- Batch Update (एक ही API Call) ----------
     if batch_values:
-        # हमें D2 से शुरू करना है, और कुल पंक्तियाँ = len(batch_values)
-        # रेंज: D2 से J{len(batch_values)+1} तक
         end_row = 2 + len(batch_values) - 1
         range_name = f"D2:J{end_row}"
         
-        print(f"💾 {len(batch_values)} पंक्तियों को एक साथ अपडेट किया जा रहा है (रेंज: {range_name})...")
+        print(f"💾 {sheet_name}: {len(batch_values)} पंक्तियों को अपडेट किया जा रहा है...")
         
         try:
-            # gspread के नए version में argument order: values, range_name
-            # लेकिन हम named arguments का उपयोग करेंगे ताकि दोनों versions चलें
             worksheet.update(range_name=range_name, values=batch_values, value_input_option='USER_ENTERED')
-            print("✅ D से J कॉलम सफलतापूर्वक अपडेट हो गए!")
+            print(f"✅ {sheet_name}: D से J कॉलम सफलतापूर्वक अपडेट हो गए!")
         except Exception as e:
-            print(f"❌ Batch Update में Error: {e}")
+            print(f"❌ {sheet_name} Batch Update में Error: {e}")
     else:
-        print("❌ अपडेट करने के लिए कोई डेटा नहीं मिला।")
+        print(f"❌ {sheet_name}: अपडेट करने के लिए कोई डेटा नहीं मिला।")
+
+# ---------- Main Execution ----------
+def main():
+    print("🚀 Technical Indicators Script Started (Both Tabs)...")
+    
+    client = get_google_client()
+    
+    # ⚠️ अपनी Sheet ID यहाँ डालें (वही ID जो update_sheet.py में है)
+    spreadsheet_id = "1h5DL7tnrNnukH_EzfteoePDSRyfuICdXC3SB367tfEQ"
+    
+    try:
+        ws_volume = client.open_by_key(spreadsheet_id).worksheet("Top 250 Stocks")
+        ws_turnover = client.open_by_key(spreadsheet_id).worksheet("Top 250 Turnover")
+        print("✅ दोनों टैब्स से कनेक्शन सफल!")
+    except Exception as e:
+        print(f"❌ Sheet कनेक्ट करने में Error: {e}")
+        exit(1)
+    
+    # पहले Volume वाला टैब
+    process_sheet(ws_volume, "Volume (Top 250 Stocks)")
+    
+    # फिर Turnover वाला टैब
+    process_sheet(ws_turnover, "Turnover (Top 250 Turnover)")
+    
+    print("\n🎉 सारे टैब्स सफलतापूर्वक अपडेट हो गए!")
 
 if __name__ == "__main__":
     main()

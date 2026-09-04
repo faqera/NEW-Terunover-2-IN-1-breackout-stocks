@@ -21,6 +21,30 @@ def get_google_client():
         print(f"❌ Google Sheet Connection Error: {e}")
         exit(1)
 
+# ---------- FIX #3: Per-Symbol Data Cache ----------
+# एक ही स्टॉक अगर Volume और Turnover दोनों टैब में है, तो yfinance से
+# सिर्फ एक ही बार डेटा लिया जाएगा और cache से reuse होगा। इससे:
+# 1. एक ही स्टॉक के दोनों टैब में अलग-अलग CAR/DMA आने वाली inconsistency खत्म
+# 2. yfinance API calls लगभग आधी हो जाती हैं
+yf_history_cache = {}
+
+def get_history(symbol):
+    """yfinance history को cache करके देता है ताकि एक ही स्टॉक के लिए
+    बार-बार अलग-अलग समय पर API call न हो (जो हल्के-हल्के अलग data देता है)"""
+    if symbol in yf_history_cache:
+        return yf_history_cache[symbol]
+    
+    try:
+        ticker = yf.Ticker(f"{symbol}.NS")
+        # auto_adjust=False -> raw/actual prices (GOOGLEFINANCE जैसा behavior)
+        hist = ticker.history(period="1y", auto_adjust=False)
+    except Exception as e:
+        print(f"⚠️ {symbol} डेटा लाने में Error: {e}")
+        hist = None
+    
+    yf_history_cache[symbol] = hist
+    return hist
+
 # ---------- Technical Indicators Calculation ----------
 def calculate_indicators(symbol, close_price):
     """
@@ -29,12 +53,9 @@ def calculate_indicators(symbol, close_price):
     Return: (cmp, dma_50, dma_100, dma_200, bull_status, dma_dist, car_rating)
     """
     try:
-        ticker = yf.Ticker(f"{symbol}.NS")
-        # FIX #2: auto_adjust=False -> raw/actual prices (GOOGLEFINANCE जैसा behavior),
-        # dividends/splits/bonus के लिए silently adjust किए हुए prices नहीं
-        hist = ticker.history(period="1y", auto_adjust=False)
+        hist = get_history(symbol)
         
-        if hist.empty:
+        if hist is None or hist.empty:
             return close_price, None, None, None, "Data Error", None, "TICKER NOT FOUND"
         
         closes = hist['Close']
@@ -61,8 +82,6 @@ def calculate_indicators(symbol, close_price):
         elif (dma_50 is not None and dma_100 is not None and dma_200 is not None and
               cmp < dma_50 and cmp < dma_100 and cmp < dma_200 and 
               # FIX #1: लोअर बाउंड जोड़ी गई (मूल formula: I2>=-10 AND I2<=-0.01)
-              # पहले सिर्फ ऊपरी सीमा (<=-0.01) चेक हो रही थी, जिससे -10% से भी ज़्यादा
-              # गिरे हुए stocks गलती से "In Bear Run" दिखा रहे थे
               dma_dist is not None and -10 <= dma_dist <= -0.01):
             bull_status = "In Bear Run"
         else:
@@ -132,7 +151,8 @@ def process_sheet(worksheet, sheet_name):
             batch_values.append(["", "", "", "", "", "", ""])
             continue
         
-        # इंडिकेटर्स निकालें
+        # इंडिकेटर्स निकालें (cache से, अगर पहले भी fetch हो चुका हो)
+        was_cached = symbol in yf_history_cache
         cmp, dma_50, dma_100, dma_200, bull_status, dma_dist, car_rating = calculate_indicators(symbol, close_price)
         
         # D से J कॉलम (7 कॉलम)
@@ -151,8 +171,9 @@ def process_sheet(worksheet, sheet_name):
         if (idx - 1) % 50 == 0:
             print(f"⏳ {sheet_name}: {idx-1}/{total_rows} स्टॉक्स प्रोसेस हो चुके हैं...")
         
-        # Rate Limit से बचने के लिए थोड़ा Delay
-        time.sleep(0.1)
+        # Rate Limit से बचने के लिए थोड़ा Delay — सिर्फ तभी जब असल में नया API call हुआ हो
+        if not was_cached:
+            time.sleep(0.1)
     
     # ---------- Batch Update (एक ही API Call) ----------
     if batch_values:
@@ -189,10 +210,10 @@ def main():
     # पहले Volume वाला टैब प्रोसेस करें
     process_sheet(ws_volume, "Volume (Top 250 Stocks)")
     
-    # फिर Turnover वाला टैब प्रोसेस करें
+    # फिर Turnover वाला टैब प्रोसेस करें (common stocks cache से आएँगे — दोबारा fetch नहीं होगा)
     process_sheet(ws_turnover, "Turnover (Top 250 Turnover)")
     
-    print("\n🎉 सारे टैब्स सफलतापूर्वक अपडेट हो गए!")
+    print(f"\n🎉 सारे टैब्स सफलतापूर्वक अपडेट हो गए! (कुल {len(yf_history_cache)} unique symbols fetch किए गए)")
 
 if __name__ == "__main__":
     main()

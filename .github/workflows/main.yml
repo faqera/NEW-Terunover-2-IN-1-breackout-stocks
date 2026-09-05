@@ -23,16 +23,19 @@ jobs:
       run: |
         pip install -r requirements.txt
 
-    # --- स्टेप 1: पहले टॉप 250 की लिस्ट (A:C) अपडेट करें ---
+    # --- स्टेप 1: Top 250 लिस्ट (A:C) अपडेट करें (पुराना वाला ही रहेगा) ---
     - name: Step 1 - Update Top 250 Lists (Volume & Turnover)
       env:
         GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
       run: |
         python update_sheet.py
 
-    # --- स्टेप 2: फिर उसी लिस्ट के हिसाब से Technical Indicators (D:J) भरें ---
-    - name: Step 2 - Update Technical Indicators (DMA/CAR/BullBear)
+    # --- स्टेप 2: Technical Indicators (D:J) अपडेट करें (अब Live LTP के साथ) ---
+    - name: Step 2 - Update Technical Indicators with INDstocks Live LTP
       env:
         GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        IND_TOTP_SECRET: ${{ secrets.IND_TOTP_SECRET }}
+        IND_CLIENT_ID: ${{ secrets.IND_CLIENT_ID }}
+        IND_MPIN: ${{ secrets.IND_MPIN }}
       run: |
-        python update_nse_sheet_from_cache.py
+        python daily_update_script.py   # <-- यहाँ नए script का नाम डालें

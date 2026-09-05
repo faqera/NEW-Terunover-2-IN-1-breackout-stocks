@@ -42,7 +42,7 @@ IND_CLIENT_ID = os.getenv("IND_CLIENT_ID")
 IND_MPIN = os.getenv("IND_MPIN")
 
 SECURITY_ID_CACHE_FILE = "indstocks_security_id_cache.json"
-LTP_MAX_WORKERS = 10  # parallel LTP calls (balance: speed vs rate-limit)
+LTP_MAX_WORKERS = 3   # या 5  # parallel LTP calls (balance: speed vs rate-limit)
 
 
 # ============================================================
